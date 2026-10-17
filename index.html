@@ -2,15 +2,21 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#075e54">
 <title>Simba – Almoxarifado</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="zmm028-data.js"></script>
 <style>
   :root { --bg:#efeae2; --top:#075e54; --me:#d9fdd3; --bot:#fff; --text:#111b21; --muted:#667781; --bar:#f0f2f5; }
   * { box-sizing:border-box; }
-  body { margin:0; font-family:Segoe UI, Roboto, Arial, sans-serif; background:#d1d7db; color:var(--text); }
-  .app { max-width:520px; height:100vh; margin:0 auto; display:flex; flex-direction:column; background:var(--bg); position:relative; overflow:hidden; }
+  /* Tela travada igual app: nada arrasta pros lados, a página não rola; só a conversa rola */
+  html, body { height:100%; overflow:hidden; overscroll-behavior:none; }
+  body { margin:0; position:fixed; inset:0; width:100%; font-family:Segoe UI, Roboto, Arial, sans-serif; background:#d1d7db; color:var(--text);
+    -webkit-text-size-adjust:100%; touch-action:manipulation; }
+  .app { max-width:520px; width:100%; height:100%; height:100dvh; height:var(--app-h, 100dvh); margin:0 auto; display:flex; flex-direction:column;
+    background:var(--bg); position:relative; overflow:hidden; }
+  header, footer { flex:0 0 auto; }
   header { background:var(--top); color:#fff; padding:10px 12px; display:flex; align-items:center; gap:11px; box-shadow:0 1px 3px rgba(0,0,0,.22); z-index:3; }
   .avatar { width:43px; height:43px; flex:0 0 43px; border-radius:50%; display:block; object-fit:cover; background:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.7); }
   header .t { flex:1; min-width:0; } header b { display:flex; align-items:center; gap:6px; font-size:16px; } header small { opacity:.82; display:block; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -22,20 +28,21 @@
   .menu.open { display:block; }
   .menu button { width:100%; padding:13px 16px; border:0; background:#fff; color:#25363c; text-align:left; cursor:pointer; }
   .menu button:hover { background:#f2f5f5; }
-  #chat { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:6px; position:relative;
+  #chat { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; padding:16px; display:flex; flex-direction:column; gap:6px; position:relative;
     background-color:#efeae2;
     background-image:linear-gradient(rgba(239,234,226,.72),rgba(239,234,226,.72)),url("simba-wallpaper.png");
     background-repeat:repeat,repeat;
     background-size:auto,520px auto;
     background-position:center,center top; }
-  .msg { max-width:85%; padding:8px 10px; border-radius:8px; white-space:pre-wrap; font-size:14.5px; line-height:1.4; box-shadow:0 1px .5px rgba(0,0,0,.13); }
+  .msg { max-width:85%; overflow-wrap:anywhere; padding:8px 10px; border-radius:8px; white-space:pre-wrap; font-size:14.5px; line-height:1.4; box-shadow:0 1px .5px rgba(0,0,0,.13); }
   .me { align-self:flex-end; background:var(--me); }
   .bot { align-self:flex-start; background:var(--bot); }
   .botoes { display:flex; flex-direction:column; margin:8px -10px -8px; border-top:1px solid #e9edef; }
   .botoes button { border:0; background:none; color:#00a884; font-size:14.5px; padding:9px; cursor:pointer; font-weight:600; }
   .botoes button + button { border-top:1px solid #e9edef; }
-  footer { background:var(--bar); padding:10px; display:flex; gap:8px; }
-  footer input { flex:1; border:0; border-radius:20px; padding:10px 14px; font-size:15px; outline:none; }
+  footer { background:var(--bar); padding:10px; padding-bottom:calc(10px + env(safe-area-inset-bottom)); display:flex; gap:8px; }
+  /* 16px: com letra menor o celular dá zoom sozinho ao tocar na caixa */
+  footer input { flex:1; min-width:0; border:0; border-radius:20px; padding:10px 14px; font-size:16px; outline:none; }
   footer button { border:0; border-radius:50%; width:42px; height:42px; padding:0; cursor:pointer; display:grid; place-items:center; flex:0 0 42px; }
   footer button svg { width:23px; height:23px; display:block; fill:currentColor; }
   footer #mic { background:transparent; color:#54656f; }
@@ -1047,6 +1054,28 @@ function enviar(texto) {
 }
 document.getElementById("send").onclick = enviar;
 txt.onkeydown = e => { if (e.key === "Enter") enviar(); };
+
+// ---------------- CELULAR: comportamento igual ao WhatsApp ----------------
+// O app ocupa exatamente a parte visível da tela. Quando o teclado abre, só a conversa
+// encolhe: o topo (Simba) continua no lugar e a caixa de digitar fica logo acima do teclado.
+const app = document.querySelector(".app");
+function ajustaTela() {
+  const vv = window.visualViewport;
+  const altura = vv ? vv.height : window.innerHeight;
+  document.documentElement.style.setProperty("--app-h", altura + "px");
+  // Alguns celulares "empurram" a página quando o teclado abre: devolve pro lugar
+  app.style.transform = vv && vv.offsetTop ? `translateY(${vv.offsetTop}px)` : "";
+  window.scrollTo(0, 0);
+}
+function rolaParaFim() { chat.scrollTop = chat.scrollHeight; }
+if (window.visualViewport) {
+  visualViewport.addEventListener("resize", () => { ajustaTela(); rolaParaFim(); });
+  visualViewport.addEventListener("scroll", ajustaTela);
+}
+window.addEventListener("resize", ajustaTela);
+window.addEventListener("orientationchange", () => setTimeout(ajustaTela, 300));
+txt.addEventListener("focus", () => setTimeout(() => { ajustaTela(); rolaParaFim(); }, 300));
+ajustaTela();
 
 // ---------------- MENU E INFORMAÇÕES PÚBLICAS ----------------
 const menuBtn = document.getElementById("menuBtn"), menuBox = document.getElementById("menuBox");
