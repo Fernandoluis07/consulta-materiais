@@ -248,6 +248,13 @@ function notaTermo(termo, palavras) {
       else if (temNum && p.startsWith(a) && /^[a-z]/.test(p.slice(a.length))) n = 8;
       else if (!temNum && a.length >= 3 && p.startsWith(a)) n = 7;   // "nitri" acha "nitrilica"
       else if (!temNum && a.length >= 5 && lev(a, p) <= 1) n = 5;    // "parafuzo" acha "parafuso"
+      // Abreviação do SAP: "hidraulico" acha "hidr", "vaqueta" acha "vaquet"
+      // (palavra que é nome de produto não vale: "capacete" não pode achar "capa")
+      else if (!temNum && p.length >= 4 && !/\d/.test(p) && a.startsWith(p) && !tipos().has(p)) n = 6;
+      // Palavras coladas no SAP: "papelao" acha "juntapapelaohid"
+      else if (!temNum && a.length >= 5 && p.length >= a.length + 4 && p.includes(a)) n = 6;
+      // Número dentro de código: "6013" acha "e6013" (mas "1/2" não acha "4.1/2", que é quatro e meio)
+      else if (temNum && a.length >= 3 && new RegExp("(^|[^0-9.])" + a.replace(/[.\/]/g, "\\$&") + "($|[^0-9])").test(p)) n = 6;
       if (n && idx === 0) n += 3;                                     // 1ª palavra = tipo do produto
       best = Math.max(best, n);
     }
@@ -303,11 +310,22 @@ function busca(msg, termosProntos) {
 
 // ---------------- CONVERSA ----------------
 const fmt = n => Number(n).toLocaleString("pt-BR");
-const linhaItem = it => `*${it.codigo}* – ${it.descricao}\nSaldo disponível: *${fmt(it.saldo)} ${it.unidade}*`;
+// Endereço do SAP (Pos.dpst.): "0300410113" vira "030.04.10.113 (Mezanino)" = área, rua, estante, vagão+bin/pallet
+// Fora do padrão (ex.: "4002") mostra do jeito que veio
+const AREAS = {"20":"Porta-palete", "30":"Mezanino", "31":"Mezanino superior", "42":"Gases", "99":"Siderúrgico"};
+const enderecoDe = it => {
+  const e = String(it.endereco || "").trim();
+  const m = e.match(/^(\d)(\d\d)(\d\d)(\d\d)(\d{3})$/);
+  return m && AREAS[m[2]] ? `${m[1]}${m[2]}.${m[3]}.${m[4]}.${m[5]} (${AREAS[m[2]]})` : e;
+};
+const linhaEndereco = it => it.endereco ? `\n📍 Endereço: *${enderecoDe(it)}*` : "";
+
+const linhaItem = it => `*${it.codigo}* – ${it.descricao}\nSaldo disponível: *${fmt(it.saldo)} ${it.unidade}*` + linhaEndereco(it);
 
 const detalhe = it => `📦 *${it.codigo}*\n${it.descricao}\n` +
   `Unidade: ${it.unidade}\n` +
-  (Number(it.saldo) > 0 ? `Saldo disponível: *${fmt(it.saldo)} ${it.unidade}*` : "⚠️ *Sem saldo disponível.*");
+  (Number(it.saldo) > 0 ? `Saldo disponível: *${fmt(it.saldo)} ${it.unidade}*` : "⚠️ *Sem saldo disponível.*") +
+  linhaEndereco(it);
 
 const textoPedido = it => it.textoCompra
   ? `🧾 *Texto do pedido de compra*\nCódigo: *${it.codigo}*\n${it.textoCompra}`
@@ -408,7 +426,8 @@ const ASSUNTOS = [
 
   { nome:"cumprimento",
     exemplos:["oi","ola","opa","e ai","eai","bom dia","boa tarde","boa noite","tudo bem","tudo bom","tudo certo",
-      "tudo joia","como vai","beleza","fala ai","salve","oi simba","ola simba","fala simba","alo"],
+      "tudo joia","como vai","beleza","fala ai","salve","oi simba","ola simba","fala simba","alo",
+      "oie","fala","fala tu","ola ola","bom dia simba","boa tarde simba","boa noite simba"],
     respostas:["Olá! Tudo ótimo 😊 " + PEDE_MATERIAL, "Oi! Tudo certo por aqui. Qual material você procura?",
       "Opa! Tudo bem sim. Em que posso te ajudar?", "Olá! 🦁 Pronto pra te ajudar. " + PEDE_MATERIAL] },
 
@@ -830,9 +849,9 @@ const CURTOS = new Set(["cumprimento","confirmacao","negacao","teste","elogio","
 const ABREVIA = {vc:"voce", vcs:"voce", voces:"voce", q:"que", pq:"porque", tb:"tambem", tbm:"tambem", kd:"cade",
   td:"tudo", blz:"beleza", obg:"obrigado", msm:"mesmo", eae:"e ai", eai:"e ai", iae:"e ai", vlw:"valeu", flw:"falou",
   obrigadao:"obrigado", brigadao:"obrigado", tmj:"valeu", dps:"depois", hj:"hoje", agr:"agora"};
-// Risadas e letras repetidas: "kkkkk" -> "kkk", "rsrsrs" -> "rsrs", "bom diaaa" -> "bom dia"
+// Risadas e letras repetidas: "kkkkk" -> "kkk", "rsrsrs" -> "rsrs", "bom diaaa" -> "bom dia", "oii" -> "oi"
 const ajeita = w => /^k{2,}$/.test(w) ? "kkk" : /^(ha){2,}h?$/.test(w) ? "haha" : /^(rs){2,}$/.test(w) ? "rsrs"
-  : /^(he){2,}$/.test(w) ? "hehe" : w.replace(/([a-z])\1{2,}/g, "$1");
+  : /^(he){2,}$/.test(w) ? "hehe" : w.replace(/([a-z])\1{2,}/g, "$1").replace(/([a-z])\1$/, "$1");
 const palavrasDe = s => normaliza(s).split(" ").map(limpa).filter(Boolean).map(ajeita)
   .flatMap(w => (ABREVIA[w] || w).split(" ")).map(raiz);
 // Palavras "fracas": não dão sentido sozinhas ("você É DE verdade" não pode bater com "de onde você é")
@@ -940,6 +959,22 @@ const sorteia = arr => arr[Math.floor(Math.random() * arr.length)];
 const respostaDe = a => { const r = sorteia(a.respostas); return typeof r === "function" ? r() : r; };
 const respostaDoAssunto = a => ({texto: respostaDe(a), botoes: a.botoes || []});
 
+// Cumprimento responde no mesmo tom: "boa noite" -> "Boa noite!", e "tudo ótimo" só se perguntaram "tudo bem"
+const SAUDACOES = [["bom dia","Bom dia!"], ["boa tarde","Boa tarde!"], ["boa noite","Boa noite!"]];
+const PERGUNTA_TUDO_BEM = ["tudo bem","tudo bom","tudo certo","tudo joia","tudo tranquilo","tudo em paz","como vai","beleza"];
+function saudacaoDe(msg) {
+  const m = palavrasDe(msg);
+  const s = SAUDACOES.find(([f]) => contem(m, palavrasDe(f)));
+  return s ? s[1] : null;
+}
+function respostaCumprimento(msg) {
+  const m = palavrasDe(msg);
+  const perguntou = PERGUNTA_TUDO_BEM.some(f => contem(m, palavrasDe(f)));
+  return {texto: (saudacaoDe(msg) || sorteia(["Olá!", "Oi!", "Opa!"])) +
+    (perguntou ? " Tudo ótimo por aqui! 😊 " : " 😊 ") +
+    sorteia([PEDE_MATERIAL, "Qual material você procura?", "Em que posso te ajudar?"])};
+}
+
 // Mensagens que o Simba não entendeu (para ensinar depois)
 const CHAVE_LOG = "simba_nao_entendeu";
 function registraNaoEntendi(msg) {
@@ -969,6 +1004,10 @@ function responde(msg) {
                                         : `⚠️ O item *${it.codigo}* está sem saldo.`};
   }
 
+  // Continuação da última lista: "42" ou "mobil" filtra, "e a 43?" troca a medida
+  const continuacao = continuaConversa(n);
+  if (continuacao) return continuacao;
+
   // Só emoji ou pontuação ("👍", "???", "...")
   if (!n.replace(/[.,/+]/g, "").trim())
     return {texto: /👍|👌|✅|🙏/.test(msg) ? "👍 Precisando de mais algum material, é só falar." : "Tô aqui! 😊 " + PEDE_MATERIAL};
@@ -991,18 +1030,25 @@ function responde(msg) {
   const assunto = assuntoDa(msg);
 
   // Emergência, processo, RH, TI, orientação de EPI -> responde na hora
-  if (assunto && assunto.assunto.direto) return respostaDoAssunto(assunto.assunto);
+  // (quantidade de retirada fica com o círculo, que responde e já passa o código)
+  if (assunto && assunto.assunto.direto && assunto.assunto.nome !== "quantidade_retirada") return respostaDoAssunto(assunto.assunto);
+
+  // Círculo de perguntas: o que quer, de quê, pra quê, achei quantos
+  const pensado = pensa(msg, assunto);
+  if (pensado) return pensado;
 
   // Palavras que já fazem parte da frase de conversa não contam como material
   // ("dor de CABEÇA" não vira busca de "parafuso cabeça")
-  const daConversa = t => assunto && assunto.palavras.some(w => igual(w, t.txt));
+  // Só palavra IGUAL conta como conversa ("graxa" é material, não "grata")
+  const daConversa = t => assunto && assunto.palavras.some(w => w === t.txt);
   const restantes = termos.filter(t => !daConversa(t));
   const forca = restantes.map(forcaMaterial);
   const materiais = restantes.filter((_, i) => forca[i] > 0);
   const temForte = forca.some(f => f === 2);
 
   // Conversa sem nenhuma palavra de material de verdade -> resposta pré-programada
-  if (assunto && !temForte) return respostaDoAssunto(assunto.assunto);
+  if (assunto && !temForte)
+    return assunto.assunto.nome === "cumprimento" ? respostaCumprimento(msg) : respostaDoAssunto(assunto.assunto);
 
   // 3) Busca de material
   if (materiais.length) {
@@ -1013,7 +1059,7 @@ function responde(msg) {
     if (r.exato && r.itens.length) {
       const MAX = 15;
       let txt = "";
-      if (assunto && assunto.assunto.nome === "cumprimento") txt += "Olá! 😊 Aqui está o que encontrei:\n\n";
+      if (assunto && assunto.assunto.nome === "cumprimento") txt += `${saudacaoDe(msg) || "Olá!"} 😊 Aqui está o que encontrei:\n\n`;
       const fora = restantes.filter((_, i) => forca[i] === 0).map(t => t.txt);
       if (fora.length) txt += `Não encontrei "${fora.join(" ")}", mas tenho:\n\n`;
       txt += r.itens.slice(0, MAX).map(linhaItem).join("\n");
@@ -1028,6 +1074,205 @@ function responde(msg) {
   registraNaoEntendi(msg);
   return {texto:"Ainda não fui programado para responder isso. 😅 Posso ajudar a procurar um *material*, explicar como a busca funciona ou encaminhar você ao balcão.",
     botoes:["Como funciona","Falar com uma pessoa"]};
+}
+
+// ---------------- CÍRCULO DE PERGUNTAS (o Simba "pensa" em etapas) ----------------
+// Em vez de decorar frases, o Simba desmonta a mensagem e se pergunta:
+//   1. O que a pessoa quer? (código, quantidade, se tem, indicação, autorização, algo pra uma tarefa)
+//   2. De quê? (o material, que vem da ZMM028)
+//   3. Pra quê? (a aplicação: "pro pneu do trator")
+//   4. Achei? Material dito = lista na hora; a pessoa filtra digitando ("42", "mobil", "e a 43?")
+// A resposta é montada com esses pedaços, não é uma frase pronta.
+
+const INTENCOES = [
+  ["autorizacao", /\b(posso|pode|podemos|da pra|consigo|liberado|liberam)\s+(eu\s+)?(levar|pegar|retirar|tirar)\b|\b(pra|para) casa\b/],
+  ["indicacao", /\b(ideal|melhor|indicad[oa]|recomend\w*|adequad[oa]|serve|servem|qual (eu )?(uso|usar|devo usar))\b/],
+  ["quantidade", /\b(quanto|quantos|quantas|quantidade)\b/],
+  ["codigo", /\b(codigo|cod)\b/],
+  ["existe", /^(e\s+)?(tem|ainda tem|voces tem|vcs tem|existe|tem como)\b/],
+  ["caracteristica", /\bqual (e )?(a )?(cor|foto|imagem|peso|cheiro|gosto)\b/],
+];
+// Palavras de pergunta não são material ("quanto tem de fita" não procura "quanto")
+("quanto quantos quantas quantidade ideal melhor indicado indicada recomenda recomendado adequado adequada " +
+ "serve servem levar usar uso devo liberado casa opcoes opcao").split(" ").forEach(w => STOPWORDS.add(w));
+
+// Tarefa -> material: "uma coisa pra apertar porca" vira "chave"
+const USOS = [
+  {verbos:/\b(apertar|soltar|desapertar|afrouxar|parafusar|desparafusar)\b/, nome:"chave (de boca, combinada, allen ou soquete)",
+   buscas:["chave combinada","chave boca","chave allen","soquete","chave fenda","chave phillips"]},
+  {verbos:/\b(furar|perfurar)\b/, nome:"broca", buscas:["broca"]},
+  {verbos:/\b(cortar)\b/, nome:"disco de corte ou serra", buscas:["disco corte","serra"]},
+  {verbos:/\b(soldar)\b/, nome:"eletrodo ou arame de solda", buscas:["eletrodo solda","arame solda"]},
+  {verbos:/\b(lubrificar|engraxar)\b/, nome:"graxa ou óleo lubrificante", buscas:["graxa","oleo lubrif"]},
+  {verbos:/\b(pintar)\b/, nome:"tinta, pincel ou rolo", buscas:["tinta","pincel","rolo"]},
+  {verbos:/\b(vedar)\b/, nome:"veda rosca ou silicone", buscas:["veda rosca","fita veda","silicone"]},
+  {verbos:/\b(fixar|prender|pendurar)\b/, nome:"bucha, parafuso ou abraçadeira", buscas:["bucha fix","abracadeira"]},
+  {verbos:/\b(emendar|isolar|encapar)\b/, nome:"fita isolante ou luva de emenda", buscas:["fita isolante","luva emenda"]},
+  {verbos:/\b(limpar)\b/, nome:"estopa, pano ou desengraxante", buscas:["estopa","pano","desengraxante"]},
+  {verbos:/\b(lixar)\b/, nome:"lixa ou disco de desbaste", buscas:["lixa","disco desbaste"]},
+];
+
+const EPI = new Set("luva oculo botina bota calcado capacete respirador mascara protetor abafador avental perneira cinto uniforme".split(" "));
+// Medida em mm que o SAP escreve em polegada ou com decimal (junta de papelão 3mm = 1/8" = 3,2mm)
+const EQUIV = {"1,6mm":["1/16","1.6mm"], "1.6mm":["1/16","1,6mm"], "3mm":["1/8","3.2mm","3,2mm"], "3,2mm":["1/8","3.2mm"],
+  "3.2mm":["1/8","3,2mm"], "5mm":["3/16"], "6mm":["1/4"], "8mm":["5/16"], "10mm":["3/8"], "12mm":["1/2"], "13mm":["1/2"],
+  "16mm":["5/8"], "19mm":["3/4"], "20mm":["3/4"], "25mm":["1"]};
+const comEquiv = t => EQUIV[t.txt] ? {...t, alts:[...t.alts, ...EQUIV[t.txt]]} : t;
+
+// Primeira palavra da descrição = tipo do produto (BOTINA, LUVA, PARAFUSO...)
+let TIPOS = null, TIPOS_DE = null;
+const tipos = () => (TIPOS_DE === ITENS && TIPOS) ||
+  (TIPOS_DE = ITENS, TIPOS = new Set(ITENS.map(i => (i.palavrasDescricao || [])[0]).filter(Boolean)));
+
+// Nicho: fica só com o que É o material, e palavra igual vence
+// ("pneu" não traz "PNEUM", "graxa" não traz "DESENGRAXANTE" nem "ANEL ... GRAXA")
+function soOMaterial(itens, tipoT, termos) {
+  const outros = termos.filter(t => t !== tipoT && !/\d/.test(t.txt)).map(t => t.txt);
+  const bate = (it, forte) => (it.palavrasDescricao || []).slice(0, 3).some(p => forte
+    // igual, ou colada com o resto do pedido ("junta papelao" acha "JUNTAPAPELAOHID")
+    ? notaTermo(tipoT, [p]) >= 13 || (p.startsWith(tipoT.txt) && outros.some(o => p.includes(o)))
+    : notaTermo(tipoT, [p]) >= 10);
+  const iguais = itens.filter(it => bate(it, true));
+  if (iguais.length) return iguais;
+  const comeco = itens.filter(it => bate(it, false));
+  return comeco.length ? comeco : itens;
+}
+
+// Memória da conversa: a última busca ("e a 43?" troca a medida) e a última lista ("mobil" filtra ela)
+let ultimaBusca = null, ultimaLista = null;
+
+// Material dito = lista na hora, sem pergunta de volta
+function mostraLista(itens, prefixo = "") {
+  ultimaLista = itens.length > 1 ? itens : null;
+  if (itens.length === 1) { itemAtual = itens[0]; return {texto: prefixo + detalhe(itens[0]), botoes: itens[0].textoCompra ? ["Ver texto do pedido"] : []}; }
+  itemAtual = null;
+  const MAX = 15;
+  let txt = prefixo + itens.slice(0, MAX).map(linhaItem).join("\n");
+  if (itens.length > MAX) txt += `\n…e mais ${itens.length - MAX}. Me diga a *medida*, *marca* ou *modelo* pra eu filtrar.`;
+  return {texto: txt, botoes: []};
+}
+
+// Depois de uma lista: "e a 43?" refaz a busca trocando o detalhe; "mobil" ou "8mm" filtra a lista
+function continuaConversa(n) {
+  if (/^\d{5,}$/.test(n)) return null;
+  const eTambem = /^e\s/.test(n);
+  const ts = termosDa(n.replace(/^e\s+/, "")).filter(t => forcaMaterial(t) > 0);
+  if (!ts.length || ts.length > 3) return null;
+  const T = tipos();
+  if (ts.some(t => !/\d/.test(t.txt) && t.alts.some(a => T.has(a)))) return null;   // falou de outro material
+  const novos = ts.map(comEquiv);
+  if (eTambem && ultimaBusca) {
+    const trocaNumero = novos.some(t => /\d/.test(t.txt));
+    const termos = [...ultimaBusca.termos.filter(t => !(trocaNumero && /\d/.test(t.txt))), ...novos];
+    const r = busca(null, termos);
+    if (r.exato && r.itens.length) { ultimaBusca = {...ultimaBusca, termos}; return mostraLista(soOMaterial(r.itens, ultimaBusca.tipoT, termos)); }
+  }
+  if (!ultimaLista) return null;
+  const achados = ultimaLista.filter(it => novos.every(t => notaTermo(t, it.palavrasDescricao || []) > 0));
+  return achados.length ? mostraLista(achados) : null;
+}
+
+function pensa(msg, assunto) {
+  const n = normaliza(msg);
+  // 1) O que a pessoa quer?
+  const intencao = (INTENCOES.find(([, re]) => re.test(n)) || [])[0] || null;
+  const uso = USOS.find(u => u.verbos.test(n));
+  // 3) Pra quê? O que vem depois de "pra/para" (ou do verbo da tarefa) é a aplicação, não o material
+  let parte = n, aplicacao = "";
+  const corte = uso ? n.search(uso.verbos)
+    : (intencao === "indicacao" || intencao === "autorizacao") ? n.search(/\s(pra|para|pro)\s/) : -1;
+  if (corte > 0) {
+    parte = n.slice(0, corte);
+    aplicacao = n.slice(corte).replace(/^\s*(pra|para|pro)\s+/, "").replace(/^(o|a|os|as|um|uma)\s+/, "").replace(/[?!.]+$/, "").trim();
+  }
+  // 2) De quê? Só palavras que existem na planilha; palavra que é da conversa ("conta uma piada") não conta
+  const conversa = assunto && assunto.assunto.nome !== "cumprimento" ? assunto.palavras : [];
+  let termos = termosDa(parte).filter(t => forcaMaterial(t) > 0 && !conversa.includes(t.txt));
+  // "posso levar 2 capacetes": o 2 é quantidade, não medida ("quantas botinas 40" o 40 é o número da botina)
+  if (intencao === "autorizacao") termos = termos.filter(t => !/^\d{1,2}$/.test(t.txt));
+  const T = tipos();
+  const tipoT = termos.find(t => !/\d/.test(t.txt) && t.alts.some(a => T.has(a)));
+  // "boa noite, preciso de óculos" -> responde o boa noite antes do material
+  const saud = saudacaoDe(msg) ? `${saudacaoDe(msg)} 😊 ` : assunto && assunto.assunto.nome === "cumprimento" ? "Olá! 😊 " : "";
+
+  // Tarefa sem material ("uma coisa pra apertar porca"): sugere o que se usa e mostra o que tem
+  if (uso && !tipoT) {
+    const opcoes = uso.buscas.map(b => ({b, r: busca(b)})).filter(o => o.r.exato && o.r.itens.length);
+    return {texto: saud + `Pra *${aplicacao}* normalmente se usa *${uso.nome}*. 🔧\n` +
+      (opcoes.length ? `Com saldo agora eu tenho:\n\n${opcoes.map(o => `• ${o.b}  _(${o.r.itens.length})_`).join("\n")}\n\nQual delas?`
+                     : "No momento não encontrei com saldo. Confirme no *balcão*."),
+      botoes: opcoes.slice(0, 6).map(o => o.b)};
+  }
+  // Material + tarefa ("disco pra cortar"): procura o material próprio pra tarefa
+  if (uso && tipoT) { const b = uso.buscas.find(b => b.startsWith(tipoT.txt)); if (b) termos = termosDa(b); }
+  if (!tipoT) return null;
+
+  // 4) Achei quantos? Medida exata primeiro; a equivalência (3mm = 1/8") só entra se a exata não existir
+  // (parafuso 12mm e 1/2" são roscas diferentes; junta de papelão 3mm é a de 1/8")
+  let r = busca(null, termos), aviso = "", eq = "";
+  if (!(r.exato && r.itens.length) && termos.some(t => EQUIV[t.txt])) {
+    const comEq = termos.map(comEquiv), rEq = busca(null, comEq);
+    if (rEq.exato && rEq.itens.length) {
+      eq = `_(não achei ${termos.filter(t => EQUIV[t.txt]).map(t => `${t.txt} exato; mostrando o mais próximo: ${EQUIV[t.txt][0]}"`).join(", ")})_\n`;
+      r = rEq; termos = comEq;
+    }
+  }
+  if (!(r.exato && r.itens.length)) {
+    // Não existe com a medida pedida: poucos parecidos mostra; muitos não despeja, pede outra medida
+    const detalhes = termos.filter(t => /\d/.test(t.txt));
+    const resto = termos.filter(t => !detalhes.includes(t));
+    const r2 = detalhes.length && resto.length ? busca(null, resto) : null;
+    if (r2 && r2.exato && r2.itens.length) {
+      const outros = soOMaterial(r2.itens, tipoT, resto);
+      const pedido = termos.map(t => t.txt).join(" ");
+      ultimaBusca = {termos: resto, tipoT};
+      if (outros.length <= 15) return mostraLista(outros, saud + `Não encontrei *${pedido}* com saldo. 😕 Mas tenho estes:\n\n`);
+      ultimaLista = outros; itemAtual = null;
+      return {texto: saud + `Não encontrei *${pedido}* com saldo. 😕\nTenho *${outros.length}* outros (${resto.map(t => t.txt).join(" ")}). Me diga outra *medida* que eu filtro.`,
+              botoes:["Falar com uma pessoa"]};
+    }
+  }
+  const nome = termos.filter(t => !/\d/.test(t.txt)).map(t => t.txt).join(" ") || tipoT.txt;
+  const itens = r.exato ? soOMaterial(r.itens, tipoT, termos) : [];
+  ultimaBusca = {termos, tipoT};
+
+  // Pergunta sem sentido ou sem resposta ("qual a cor do parafuso do pneu da lua?"): aproveita o material
+  if (intencao === "caracteristica" || (!itens.length && termos.some(t => t !== tipoT && !/\d/.test(t.txt)))) {
+    return {texto: saud + (intencao === "caracteristica" ? "Essa informação eu não tenho 😅" : `Não encontrei *${termos.map(t => t.txt).join(" ")}* com saldo. 😕`) +
+      `\nMas se precisar de *${tipoT.txt}*, me diga a *medida* ou o *modelo* que eu passo o código!`,
+      botoes:[`Ver opções de ${tipoT.txt}`]};
+  }
+
+  if (intencao === "indicacao") {
+    const quem = EPI.has(tipoT.txt) ? "a *Segurança do Trabalho*" : "a *manutenção* ou seu *líder*";
+    // A aplicação aparece na descrição? ("luva pra produto químico" -> LUVA SEG QUIM)
+    const aplic = termosDa(aplicacao).filter(t => forcaMaterial(t) > 0 && t.txt !== tipoT.txt);
+    const servem = aplic.length ? itens.filter(it => aplic.some(t => notaTermo(t, it.palavrasDescricao || []) >= 6)) : [];
+    ultimaLista = itens.length > 1 ? (servem.length ? servem : itens) : null;
+    return {texto: saud + `Qual *${nome}* é ideal${aplicacao ? ` pra *${aplicacao}*` : ""} quem orienta é ${quem}. 🔧\n` +
+      `Se souber a *medida* ou o *modelo*, me diga que eu passo o código.` +
+      (servem.length ? `\n\nPela descrição, estas parecem ser pra *${aplicacao}* (confirme antes de usar):\n\n` +
+                         servem.slice(0, 5).map(linhaItem).join("\n") + (servem.length > 5 ? `\n…e mais ${servem.length - 5}.` : "")
+       : itens.length ? `\n\nCom saldo agora tenho *${itens.length}* ${itens.length === 1 ? "opção" : "opções"} de ${nome}.` : ""),
+      botoes: itens.length && !servem.length ? [`Ver opções de ${nome}`] : []};
+  }
+  if (!itens.length)
+    return {texto: saud + `No momento não encontrei *${termos.map(t => t.txt).join(" ")}* com saldo. 😕\nTente outro nome (marca, medida) ou mande o *código*.`,
+            botoes:["Falar com uma pessoa"]};
+  if (intencao === "autorizacao") {
+    itemAtual = itens.length === 1 ? itens[0] : null; ultimaLista = itens.length > 1 ? itens : null;
+    return {texto: saud + `Quantidade e liberação quem decide é a *equipe do balcão*` +
+      (/casa/.test(aplicacao) ? " (levar material pra casa só com autorização)" : "") +
+      `. 🙂\nMas já te adianto ${itens.length === 1 ? "o código" : "os códigos"} de *${nome}*:\n\n` +
+      itens.slice(0, 5).map(linhaItem).join("\n") + (itens.length > 5 ? `\n…e mais ${itens.length - 5}.` : ""),
+      botoes:["Falar com uma pessoa"]};
+  }
+  if (intencao === "quantidade" && itens.length === 1) {
+    const it = itens[0]; itemAtual = it; ultimaLista = null;
+    return {texto: saud + aviso + `📦 *${it.descricao}*\nCódigo *${it.codigo}*: tenho *${fmt(it.saldo)} ${it.unidade}* em estoque.`};
+  }
+  const abertura = intencao === "existe" ? "Tem sim! ✅\n" : "";
+  return mostraLista(itens, (saud ? saud.trim() + "\n\n" : "") + abertura + aviso + eq);
 }
 
 // ---------------- INTERFACE ----------------
