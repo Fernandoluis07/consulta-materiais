@@ -1455,7 +1455,7 @@ document.querySelectorAll(".modal-wrap").forEach(m => m.onclick = e => { if (e.t
 
 // Feedback vai para o Microsoft Forms: as respostas caem numa planilha do Fernando (antes ficava só no celular)
 // Para ligar: cole aqui o link do Forms (no Forms: "Coletar respostas" > "Copiar link")
-const LINK_FORMS_FEEDBACK = "";
+const LINK_FORMS_FEEDBACK = "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=i-tiofXcMEC5C786XmApy5KyqLWboKlHmlUfX0TkSllURUJITTZOMkZFSVU0V0tXVVhGMU43Nk1aRy4u";
 const feedbackLink = document.getElementById("feedbackLink");
 if (LINK_FORMS_FEEDBACK) feedbackLink.href = LINK_FORMS_FEEDBACK;
 else feedbackLink.onclick = e => { e.preventDefault(); document.getElementById("feedbackAviso").style.display = "block"; };
