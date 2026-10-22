@@ -332,9 +332,8 @@ const linhaEndereco = it => it.endereco ? `\n📍 Endereço: *${enderecoDe(it)}*
 
 const linhaItem = it => `*${it.codigo}* – ${it.descricao}\nSaldo disponível: *${fmt(it.saldo)} ${it.unidade}*` + linhaEndereco(it);
 
-// Material aberto: só saldo; o endereço fica no botão
-// (o botão "🧾 Descrição completa" volta quando a planilha com as descrições chegar)
-const BOTOES_ITEM = ["📍 Localização"];
+// Material aberto: só saldo; endereço e descrição completa ficam nos botões
+const BOTOES_ITEM = ["📍 Localização", "🧾 Descrição completa"];
 const detalhe = it => `📦 *${it.codigo}*\n${it.descricao}\n` +
   `Unidade: ${it.unidade}\n` +
   (Number(it.saldo) > 0 ? `Saldo disponível: *${fmt(it.saldo)} ${it.unidade}*` : "⚠️ *Sem saldo disponível.*");
@@ -374,9 +373,26 @@ const localizacaoDe = it => {
        : cru ? `\n\n📍 <b>${esc(cru)}</b>\n<i>Endereço fora do padrão: confirme no balcão.</i>`
              : `\n\nEsse material não tem endereço cadastrado. Confirme no <b>balcão</b>.`)};
 };
-const descricaoCompleta = it => ({texto: it.textoCompra
-  ? `🧾 *Descrição completa – ${it.codigo}*\n${it.descricao}\n\n${it.textoCompra}`
-  : `🧾 *${it.codigo}* – ${it.descricao}\n\nA descrição completa deste material *ainda não foi carregada*. 😕`});
+// Descrição completa (ZMM045) vem num arquivo à parte, baixado só quando alguém pede: o Simba continua leve pra abrir
+const ARQ_DESCRICOES = "descricoes.js";
+let carregandoDescricoes = null;
+function carregaDescricoes() {
+  if (window.DESCRICOES_DATA) return Promise.resolve();
+  return carregandoDescricoes || (carregandoDescricoes = new Promise((ok, erro) => {
+    const s = document.createElement("script");
+    s.src = ARQ_DESCRICOES + "?v=" + String((BASE_ZMM028 && BASE_ZMM028.generatedAt) || "").replace(/\D/g, "");
+    s.onload = ok; s.onerror = () => { carregandoDescricoes = null; erro(); };
+    document.head.appendChild(s);
+  }));
+}
+// Texto inteiro, do jeito que está no SAP (sem quebrar em tópicos)
+const descricaoCompleta = it => {
+  if (!window.DESCRICOES_DATA) return {espera: carregaDescricoes(), depois: () => descricaoCompleta(it)};
+  const texto = DESCRICOES_DATA.textos[String(it.codigo).replace(/^0+/, "")] || it.textoCompra;
+  return {texto: texto
+    ? `🧾 *Descrição completa – ${it.codigo}*\n${it.descricao}\n\n${texto}`
+    : `🧾 *${it.codigo}* – ${it.descricao}\n\nEste material ainda *não tem descrição completa* cadastrada. 😕`};
+};
 
 // Pedido direto: "descrição completa do 812425", "localização do joelho pvc 25mm"
 // (o jeito antigo "texto de compra do ..." continua valendo)
@@ -1378,7 +1394,13 @@ function bolha(texto, quem, botoes = [], html = "") {
 function enviar(texto) {
   const m = (typeof texto === "string" ? texto : txt.value).trim(); if (!m) return;
   bolha(m, "me"); txt.value = "";
-  setTimeout(() => { const r = responde(m); bolha(r.texto || "", "bot", r.botoes || [], r.html); }, 250);
+  const mostra = r => bolha(r.texto || "", "bot", r.botoes || [], r.html);
+  setTimeout(() => {
+    const r = responde(m);
+    // Resposta que precisa baixar algo antes (ex.: descrição completa): espera e mostra
+    if (r.espera) r.espera.then(() => mostra(r.depois()), () => mostra({texto:"Não consegui carregar a descrição completa agora. 😕 Tente de novo em instantes."}));
+    else mostra(r);
+  }, 250);
 }
 document.getElementById("send").onclick = enviar;
 txt.onkeydown = e => { if (e.key === "Enter") enviar(); };
