@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#075e54">
 <title>Simba – Almoxarifado</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="zmm028-data.js?v=21102026065847"></script>
+<script src="zmm028-data.js?v=22102026065830"></script>
 <style>
   :root { --bg:#efeae2; --top:#075e54; --me:#d9fdd3; --bot:#fff; --text:#111b21; --muted:#667781; --bar:#f0f2f5; }
   * { box-sizing:border-box; }
@@ -68,6 +68,15 @@
   .star.on { color:#f6b800; }
   .feedback-send { width:100%; border:0; border-radius:9px; background:#00a884; color:#fff; padding:11px; font-weight:700; cursor:pointer; }
   .feedback-send:hover { background:#008f72; }
+  a.feedback-send { display:block; text-align:center; text-decoration:none; margin-top:14px; }
+  .end-exemplo { margin:6px 0 4px; padding:10px 12px; border-radius:9px; background:#e8f7f3; color:#087b69; font-size:17px; font-weight:700; text-align:center; }
+  .msg .end-exemplo { margin:8px 0 6px; font-size:18px; }
+  .end-tabela { width:100%; border-collapse:collapse; font-size:14px; white-space:normal; }
+  .end-tabela td { padding:4px 6px; border-bottom:1px solid #e7ecee; vertical-align:middle; }
+  .end-tabela tr:last-child td { border-bottom:0; }
+  .end-tabela .num { width:44px; font-weight:700; font-size:15px; color:#087b69; }
+  .end-tabela .ico { width:38px; }
+  .end-tabela svg { display:block; }
   .feedback-ok { display:none; padding:10px; margin-top:12px; border-radius:8px; background:#e8f7f3; color:#087b69; text-align:center; font-weight:650; }
   @keyframes pulsa { 50% { transform:scale(1.12); } }
 </style>
@@ -98,7 +107,7 @@
 
   <div class="modal-wrap" id="aboutModal"><section class="modal"><div class="modal-head"><h2>Sobre o Simba</h2><button class="modal-close" type="button" aria-label="Fechar">×</button></div><div class="modal-body"><p>O Simba é o atendente automático do Almoxarifado PDL. Ele ajuda a localizar materiais, consultar códigos e verificar o saldo disponível.</p><p><b>Atenção ao saldo:</b> a quantidade corresponde à última atualização exibida no cabeçalho. Uma retirada ou entrada feita depois desse horário pode ainda não aparecer.</p><p>As respostas são voltadas ao atendimento do almoxarifado. Procedimentos, autorizações e escolha de EPI devem ser confirmados com a equipe responsável.</p></div></section></div>
   <div class="modal-wrap" id="howModal"><section class="modal"><div class="modal-head"><h2>Como funciona</h2><button class="modal-close" type="button" aria-label="Fechar">×</button></div><div class="modal-body"><p>O Simba consulta a base do Almoxarifado PDL para localizar materiais e mostrar o saldo registrado na última atualização.</p><h3>Como pesquisar</h3><ul class="examples"><li><b>Nome ou característica:</b> óculos de segurança, válvula borboleta 3 polegadas.</li><li><b>Código:</b> envie o número do material para uma consulta direta.</li><li><b>Referência técnica:</b> informe marca, modelo ou medida quando conhecer.</li></ul><h3>Como ler o resultado</h3><p>Cada resultado apresenta o código, a descrição cadastrada e o <b>saldo disponível em destaque</b>. Confira também o horário de atualização no cabeçalho, pois movimentações posteriores podem ainda não estar registradas.</p></div></section></div>
-  <div class="modal-wrap" id="feedbackModal"><section class="modal"><div class="modal-head"><h2>Enviar feedback</h2><button class="modal-close" type="button" aria-label="Fechar">×</button></div><form class="modal-body" id="feedbackForm"><div class="form-field"><label for="feedbackName">Seu nome</label><input id="feedbackName" required maxlength="80" placeholder="Digite seu nome"></div><div class="form-field"><label>Sua avaliação</label><div class="stars" id="stars" role="radiogroup" aria-label="Avaliação de uma a três estrelas"><button class="star" type="button" data-value="1" aria-label="1 estrela">★</button><button class="star" type="button" data-value="2" aria-label="2 estrelas">★</button><button class="star" type="button" data-value="3" aria-label="3 estrelas">★</button></div></div><div class="form-field"><label for="feedbackComment">Comentário</label><textarea id="feedbackComment" required maxlength="500" rows="4" placeholder="Conte como foi o atendimento"></textarea></div><button class="feedback-send" type="submit">Enviar feedback</button><div class="feedback-ok" id="feedbackOk">Feedback enviado. Obrigado!</div></form></section></div>
+  <div class="modal-wrap" id="feedbackModal"><section class="modal"><div class="modal-head"><h2>Enviar feedback</h2><button class="modal-close" type="button" aria-label="Fechar">×</button></div><div class="modal-body"><p>Conte como foi o atendimento do Simba: o que ajudou, o que faltou e o que podemos melhorar.</p><p>O formulário abre numa nova aba e leva menos de 1 minuto.</p><a class="feedback-send" id="feedbackLink" href="#" target="_blank" rel="noopener">Abrir formulário de feedback</a><div class="feedback-ok" id="feedbackAviso">O formulário de feedback ainda não foi configurado.</div></div></section></div>
 </div>
 
 <script>
@@ -310,26 +319,91 @@ function busca(msg, termosProntos) {
 
 // ---------------- CONVERSA ----------------
 const fmt = n => Number(n).toLocaleString("pt-BR");
-// Endereço do SAP (Pos.dpst.): "0300410113" vira "030.04.10.113 (Mezanino)" = área, rua, estante, vagão+bin/pallet
-// Fora do padrão (ex.: "4002") mostra do jeito que veio
-const AREAS = {"20":"Porta-palete", "30":"Mezanino", "31":"Mezanino superior", "42":"Gases", "99":"Siderúrgico"};
-const enderecoDe = it => {
-  const e = String(it.endereco || "").trim();
-  const m = e.match(/^(\d)(\d\d)(\d\d)(\d\d)(\d{3})$/);
-  return m && AREAS[m[2]] ? `${m[1]}${m[2]}.${m[3]}.${m[4]}.${m[5]} (${AREAS[m[2]]})` : e;
+// Endereço do SAP (Pos.dpst.): "0300707201" vira "030-07-07-2-01" = área, rua, módulo, nível, bin
+// (no Porta-palete o último é o pallet). Fora do padrão (ex.: "4002") mostra do jeito que veio
+const AREAS = {"20":"Porta-palete", "30":"Mezanino inferior", "31":"Mezanino superior", "42":"Gases", "99":"Siderúrgico"};
+const partesEndereco = e => {
+  const m = String(e || "").trim().match(/^(\d)(\d\d)(\d\d)(\d\d)(\d)(\d\d)$/);
+  return m && AREAS[m[2]] ? {area: m[1] + m[2], nomeArea: AREAS[m[2]], rua: m[3], modulo: m[4], nivel: m[5], bin: m[6], pallet: m[2] === "20"} : null;
 };
+const codigoEndereco = p => `${p.area}-${p.rua}-${p.modulo}-${p.nivel}-${p.bin}`;
+const enderecoDe = it => { const p = partesEndereco(it.endereco); return p ? `${codigoEndereco(p)} (${p.nomeArea})` : String(it.endereco || "").trim(); };
 const linhaEndereco = it => it.endereco ? `\n📍 Endereço: *${enderecoDe(it)}*` : "";
 
 const linhaItem = it => `*${it.codigo}* – ${it.descricao}\nSaldo disponível: *${fmt(it.saldo)} ${it.unidade}*` + linhaEndereco(it);
 
+// Material aberto: só saldo; endereço e descrição completa ficam nos botões
+const BOTOES_ITEM = ["📍 Localização", "🧾 Descrição completa"];
 const detalhe = it => `📦 *${it.codigo}*\n${it.descricao}\n` +
   `Unidade: ${it.unidade}\n` +
-  (Number(it.saldo) > 0 ? `Saldo disponível: *${fmt(it.saldo)} ${it.unidade}*` : "⚠️ *Sem saldo disponível.*") +
-  linhaEndereco(it);
+  (Number(it.saldo) > 0 ? `Saldo disponível: *${fmt(it.saldo)} ${it.unidade}*` : "⚠️ *Sem saldo disponível.*");
 
-const textoPedido = it => it.textoCompra
-  ? `🧾 *Texto do pedido de compra*\nCódigo: *${it.codigo}*\n${it.textoCompra}`
-  : `O texto do pedido de compra ainda não está disponível para o material *${it.codigo}*.`;
+// Ícones do endereço desenhados aqui: aparecem iguais em qualquer celular e não dependem de internet
+const ICONE = (() => {
+  const v = "#087b69", c = "#9ee0cf";
+  const svg = (corpo, larg = 1.8) => `<svg viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="${v}" stroke-width="${larg}" stroke-linejoin="round" stroke-linecap="round">${corpo}</svg>`;
+  return {
+    area: svg(`<path d="M3 13 16 5l13 8v14H3z" fill="${c}"/><path d="M8 27V17h16v10"/><path d="M8 21h16M8 24h16"/>`),
+    rua: svg(`<rect x="3" y="5" width="6" height="22" fill="${c}"/><rect x="23" y="5" width="6" height="22" fill="${c}"/><path d="M16 9v14M13 20l3 3 3-3"/>`),
+    modulo: svg(`<rect x="1.5" y="6" width="9" height="21" stroke-opacity=".45"/><path d="M1.5 13h9M1.5 20h9" stroke-opacity=".45"/>` +
+      `<rect x="11.5" y="4" width="9" height="23" fill="${c}" stroke-width="2.2"/><path d="M11.5 11.5h9M11.5 19h9" stroke-width="2.2"/>` +
+      `<rect x="13.5" y="7.5" width="5" height="3" fill="${v}" stroke="none"/><rect x="13.5" y="15" width="5" height="3" fill="${v}" stroke="none"/>` +
+      `<rect x="13.5" y="22.5" width="5" height="3" fill="${v}" stroke="none"/><rect x="21.5" y="6" width="9" height="21" stroke-opacity=".45"/>` +
+      `<path d="M21.5 13h9M21.5 20h9" stroke-opacity=".45"/><path d="M1 29h30"/>`, 1.6),
+    nivel: svg(`<rect x="7" y="3" width="18" height="26"/><rect x="7" y="11" width="18" height="8" fill="${v}" stroke="${v}"/><path d="M3 15h2M27 15h2"/>`),
+    bin: svg(`<path d="M5 11h22v15H5z" fill="${c}"/><path d="M3 6h26v5H3z"/><path d="M13 16h6"/>`),
+    // Pallet vazio em perspectiva: tábuas em cima e os vãos do garfo da empilhadeira
+    pallet: svg(`<polygon points="4,16 16,10 28,16 16,22" fill="${c}"/><path d="M8 14 20 20M12 12 24 18" stroke-width="1.2"/>` +
+      `<polygon points="4,16 16,22 16,27 4,21" fill="#c9efe4"/><polygon points="16,22 28,16 28,21 16,27" fill="${c}"/>` +
+      `<polygon points="6,19 9.5,20.75 9.5,23.25 6,21.5" fill="${v}" stroke="none"/><polygon points="11,21.5 14.5,23.25 14.5,25.75 11,24" fill="${v}" stroke="none"/>` +
+      `<polygon points="17.5,23.25 21,21.5 21,24 17.5,25.75" fill="${v}" stroke="none"/><polygon points="22.5,20.75 26,19 26,21.5 22.5,23.25" fill="${v}" stroke="none"/>`, 1.5),
+  };
+})();
+// Endereço em destaque + linha a linha com ícone
+const blocoEndereco = p => `<div class="end-exemplo">📍 ${codigoEndereco(p)}</div><table class="end-tabela">` +
+  [[p.area, ICONE.area, p.nomeArea], [p.rua, ICONE.rua, "Rua"], [p.modulo, ICONE.modulo, "Módulo"],
+   [p.nivel, ICONE.nivel, "Nível"], [p.bin, p.pallet ? ICONE.pallet : ICONE.bin, p.pallet ? "Pallet" : "Bin"]]
+    .map(([n, ic, t]) => `<tr><td class="num">${n}</td><td class="ico">${ic}</td><td>${t}</td></tr>`).join("") + `</table>`;
+
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const localizacaoDe = it => {
+  const p = partesEndereco(it.endereco), cru = String(it.endereco || "").trim();
+  return {html: `📍 <b>Localização – ${esc(it.codigo)}</b>\n${esc(it.descricao)}` +
+    (p ? blocoEndereco(p)
+       : cru ? `\n\n📍 <b>${esc(cru)}</b>\n<i>Endereço fora do padrão: confirme no balcão.</i>`
+             : `\n\nEsse material não tem endereço cadastrado. Confirme no <b>balcão</b>.`)};
+};
+const descricaoCompleta = it => ({texto: it.textoCompra
+  ? `🧾 *Descrição completa – ${it.codigo}*\n${it.descricao}\n\n${it.textoCompra}`
+  : `🧾 *${it.codigo}* – ${it.descricao}\n\nA descrição completa deste material *ainda não foi carregada*. 😕`});
+
+// Pedido direto: "descrição completa do 812425", "localização do joelho pvc 25mm"
+// (o jeito antigo "texto de compra do ..." continua valendo)
+const PEDE_DESCRICAO = /\b(descricao completa|(texto|descricao|especificacao)\s+(de |da |do )?(compra|pedido)( de compra)?)\b/;
+const PEDE_LOCAL = /\b(localizacao|endereco)\b/;
+let aguardandoSobre = null;   // o Simba pediu o código pra mostrar a localização ou a descrição
+function respondeSobreMaterial(n, pedido, mostra, oQue, rotulo) {
+  const resto = n.replace(pedido, " ")
+    .replace(/\b(do|da|de|o|a|material|codigo|cod|qual|e|me|passa|mostra|ver|onde|fica|por favor)\b/g, " ");
+  // Código ditado no microfone vem picado: "R$8.1.24.25" ou "8 1 24 25" -> 812425
+  if (!/[a-z]{2,}/.test(resto)) {
+    const cod = resto.replace(/\D/g, "");
+    if (cod.length < 5) { aguardandoSobre = mostra; return {texto:`Me diga o *código* ou o *nome* do material que eu mostro ${oQue}.`}; }
+    const it = ITENS.find(i => String(i.codigo).replace(/^0+/, "") === cod.replace(/^0+/, ""));
+    if (!it) return {texto:`Não encontrei o código *${cod}*. Confira o número e tente de novo.`};
+    itemAtual = it;
+    return mostra(it);
+  }
+  // Pelo nome: um item mostra; vários, a pessoa escolhe qual
+  const r = busca(resto);
+  const T = tipos(), termos = r.termos, tipoT = termos.find(t => !/\d/.test(t.txt) && t.alts.some(a => T.has(a)));
+  const itens = r.exato && r.itens.length ? (tipoT ? soOMaterial(r.itens, tipoT, termos) : r.itens) : [];
+  if (!itens.length) return {texto:`Não encontrei *${resto.trim().replace(/\s+/g, " ")}* com saldo. Tente pelo *código* do material.`};
+  if (itens.length === 1) { itemAtual = itens[0]; return mostra(itens[0]); }
+  return {texto:`Achei *${itens.length}* materiais. De qual você quer ${oQue}?\n\n` + itens.slice(0, 6).map(it => `*${it.codigo}* – ${it.descricao}`).join("\n") +
+    (itens.length > 6 ? `\n…e mais ${itens.length - 6}. Seja mais específico ou mande o *código*.` : ""),
+    botoes: itens.slice(0, 6).map(it => `${rotulo} ${it.codigo}`)};
+}
 
 // ---------------- MENSAGENS PRÉ-PROGRAMADAS (o "caderno" do Simba) ----------------
 // Cada assunto: jeitos de perguntar (exemplos) + respostas (o Simba sorteia uma).
@@ -987,17 +1061,24 @@ function registraNaoEntendi(msg) {
 
 // Estado da conversa (no WhatsApp real, um por número de telefone)
 const SAUDACAO = "Olá! 👋 Sou o *Simba*, atendente do almoxarifado PDL.\nEm que posso te ajudar?";
-let aguardandoCodigo = false, aguardandoTextoCompra = false, itemAtual = null;
+let aguardandoCodigo = false, itemAtual = null;
 
-// Resposta = {texto, botoes}; botões viram "botões de resposta" no WhatsApp
+// Resposta = {texto, botoes} ou {html, botoes}; botões viram "botões de resposta" no WhatsApp
 function responde(msg) {
   const n = normaliza(msg);
 
-  if (n === "ver texto do pedido" || n === "texto do pedido") {
-    if (itemAtual) return {texto:textoPedido(itemAtual)};
-    aguardandoTextoCompra = true;
-    return {texto:"Digite o *código* do material para consultar o texto do pedido de compra."};
+  // Botões do material ("📍 Localização", "🧾 Descrição completa"): valem para o último material aberto
+  const botaoLocal = n === "localizacao" || n === "ver localizacao";
+  const botaoDescricao = n === "descricao completa" || n === "ver descricao completa" ||
+    ["ver texto de compra", "ver texto do pedido", "texto do pedido", "texto de compra"].includes(n);
+  if (botaoLocal || botaoDescricao) {
+    const mostra = botaoLocal ? localizacaoDe : descricaoCompleta;
+    if (itemAtual) return mostra(itemAtual);
+    aguardandoSobre = mostra;
+    return {texto:`Me diga o *código* ou o *nome* do material que eu mostro ${botaoLocal ? "a localização" : "a descrição completa"}.`};
   }
+  if (PEDE_DESCRICAO.test(n)) return respondeSobreMaterial(n, PEDE_DESCRICAO, descricaoCompleta, "a descrição completa", "Descrição completa do");
+  if (PEDE_LOCAL.test(n)) return respondeSobreMaterial(n, PEDE_LOCAL, localizacaoDe, "a localização", "Localização do");
   if (n === "e esse" && itemAtual) {
     const it = itemAtual; itemAtual = null;
     return {texto: Number(it.saldo) > 0 ? `✅ Certo! Retire no balcão com o código *${it.codigo}*.`
@@ -1020,11 +1101,11 @@ function responde(msg) {
     if (!r.itens.length) return {texto:"Código não encontrado."};
     const it = r.itens[0];
     itemAtual = it;
-    if (aguardandoTextoCompra) { aguardandoTextoCompra = false; return {texto:textoPedido(it)}; }
+    if (aguardandoSobre) { const mostra = aguardandoSobre; aguardandoSobre = null; return mostra(it); }
     aguardandoCodigo = false;
-    return {texto:detalhe(it), botoes:it.textoCompra ? ["Ver texto do pedido"] : []};
+    return {texto:detalhe(it), botoes:BOTOES_ITEM};
   }
-  aguardandoCodigo = false; aguardandoTextoCompra = false;
+  aguardandoCodigo = false; aguardandoSobre = null;
 
   // 2) Separa conversa de busca: quais palavras existem de verdade na planilha?
   const assunto = assuntoDa(msg);
@@ -1144,7 +1225,7 @@ let ultimaBusca = null, ultimaLista = null;
 // Material dito = lista na hora, sem pergunta de volta
 function mostraLista(itens, prefixo = "") {
   ultimaLista = itens.length > 1 ? itens : null;
-  if (itens.length === 1) { itemAtual = itens[0]; return {texto: prefixo + detalhe(itens[0]), botoes: itens[0].textoCompra ? ["Ver texto do pedido"] : []}; }
+  if (itens.length === 1) { itemAtual = itens[0]; return {texto: prefixo + detalhe(itens[0]), botoes: BOTOES_ITEM}; }
   itemAtual = null;
   const MAX = 15;
   let txt = prefixo + itens.slice(0, MAX).map(linhaItem).join("\n");
@@ -1277,9 +1358,10 @@ function pensa(msg, assunto) {
 
 // ---------------- INTERFACE ----------------
 const chat = document.getElementById("chat"), txt = document.getElementById("txt");
-function bolha(texto, quem, botoes = []) {
+// html = resposta já montada pelo Simba (ex.: localização com ícones); texto = mensagem comum com *negrito* e _itálico_
+function bolha(texto, quem, botoes = [], html = "") {
   const d = document.createElement("div"); d.className = "msg " + quem;
-  d.innerHTML = texto.replace(/&/g,"&amp;").replace(/</g,"&lt;")
+  d.innerHTML = html || texto.replace(/&/g,"&amp;").replace(/</g,"&lt;")
     .replace(/\*([^*\n]+)\*/g,"<b>$1</b>").replace(/_([^_\n]+)_/g,"<i>$1</i>");
   if (botoes.length) {
     const bx = document.createElement("div"); bx.className = "botoes";
@@ -1295,7 +1377,7 @@ function bolha(texto, quem, botoes = []) {
 function enviar(texto) {
   const m = (typeof texto === "string" ? texto : txt.value).trim(); if (!m) return;
   bolha(m, "me"); txt.value = "";
-  setTimeout(() => { const r = responde(m); bolha(r.texto, "bot", r.botoes); }, 250);
+  setTimeout(() => { const r = responde(m); bolha(r.texto || "", "bot", r.botoes || [], r.html); }, 250);
 }
 document.getElementById("send").onclick = enviar;
 txt.onkeydown = e => { if (e.key === "Enter") enviar(); };
@@ -1348,27 +1430,12 @@ document.querySelectorAll("[data-modal]").forEach(b => b.onclick = () => {
 document.querySelectorAll(".modal-close").forEach(b => b.onclick = () => b.closest(".modal-wrap").classList.remove("open"));
 document.querySelectorAll(".modal-wrap").forEach(m => m.onclick = e => { if (e.target === m) m.classList.remove("open"); });
 
-// Feedback separado das conversas e das mensagens não atendidas.
-const CHAVE_FEEDBACK = "simba_feedbacks", CHAVE_VISITANTE = "simba_visitante";
-let visitante = localStorage.getItem(CHAVE_VISITANTE);
-if (!visitante) { visitante = String(Math.floor(1000 + Math.random() * 9000)); localStorage.setItem(CHAVE_VISITANTE, visitante); }
-let estrelas = 0;
-const stars = [...document.querySelectorAll(".star")];
-stars.forEach(s => s.onclick = () => {
-  estrelas = Number(s.dataset.value);
-  stars.forEach(x => x.classList.toggle("on", Number(x.dataset.value) <= estrelas));
-});
-document.getElementById("feedbackForm").onsubmit = e => {
-  e.preventDefault();
-  if (!estrelas) return bolha("Escolha de *1 a 3 estrelas* antes de enviar o feedback.", "bot");
-  let lista = [];
-  try { lista = JSON.parse(localStorage.getItem(CHAVE_FEEDBACK) || "[]"); } catch (e) {}
-  lista.push({visitante, nome:document.getElementById("feedbackName").value.trim(), estrelas,
-    comentario:document.getElementById("feedbackComment").value.trim(), quando:new Date().toISOString()});
-  localStorage.setItem(CHAVE_FEEDBACK, JSON.stringify(lista.slice(-200)));
-  document.getElementById("feedbackOk").style.display = "block";
-  e.target.reset(); estrelas = 0; stars.forEach(x => x.classList.remove("on"));
-};
+// Feedback vai para o Microsoft Forms: as respostas caem numa planilha do Fernando (antes ficava só no celular)
+// Para ligar: cole aqui o link do Forms (no Forms: "Coletar respostas" > "Copiar link")
+const LINK_FORMS_FEEDBACK = "";
+const feedbackLink = document.getElementById("feedbackLink");
+if (LINK_FORMS_FEEDBACK) feedbackLink.href = LINK_FORMS_FEEDBACK;
+else feedbackLink.onclick = e => { e.preventDefault(); document.getElementById("feedbackAviso").style.display = "block"; };
 document.getElementById("log").onclick = () => {
   let l = [];
   try { l = JSON.parse(localStorage.getItem(CHAVE_LOG) || "[]"); } catch (e) {}
