@@ -332,8 +332,9 @@ const linhaEndereco = it => it.endereco ? `\n📍 Endereço: *${enderecoDe(it)}*
 
 const linhaItem = it => `*${it.codigo}* – ${it.descricao}\nSaldo disponível: *${fmt(it.saldo)} ${it.unidade}*` + linhaEndereco(it);
 
-// Material aberto: só saldo; endereço e descrição completa ficam nos botões
-const BOTOES_ITEM = ["📍 Localização", "🧾 Descrição completa"];
+// Material aberto: só saldo; o endereço fica no botão
+// (o botão "🧾 Descrição completa" volta quando a planilha com as descrições chegar)
+const BOTOES_ITEM = ["📍 Localização"];
 const detalhe = it => `📦 *${it.codigo}*\n${it.descricao}\n` +
   `Unidade: ${it.unidade}\n` +
   (Number(it.saldo) > 0 ? `Saldo disponível: *${fmt(it.saldo)} ${it.unidade}*` : "⚠️ *Sem saldo disponível.*");
