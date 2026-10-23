@@ -60,15 +60,6 @@
   .modal-body { padding:18px; font-size:14px; line-height:1.5; }
   .modal-body h3 { margin:14px 0 6px; font-size:14px; }
   .examples { margin:8px 0 0; padding-left:20px; }
-  .form-field { margin-bottom:14px; } .form-field label { display:block; font-weight:650; margin-bottom:6px; }
-  .form-field input,.form-field textarea { width:100%; border:1px solid #cbd5d8; border-radius:9px; padding:10px 11px; outline:none; }
-  .form-field input:focus,.form-field textarea:focus { border-color:#00a884; box-shadow:0 0 0 3px rgba(0,168,132,.12); }
-  .stars { display:flex; gap:8px; }
-  .star { border:0; background:transparent; color:#bbc4c7; font-size:34px; cursor:pointer; padding:0; line-height:1; }
-  .star.on { color:#f6b800; }
-  .feedback-send { width:100%; border:0; border-radius:9px; background:#00a884; color:#fff; padding:11px; font-weight:700; cursor:pointer; }
-  .feedback-send:hover { background:#008f72; }
-  a.feedback-send { display:block; text-align:center; text-decoration:none; margin-top:14px; }
   .end-exemplo { margin:6px 0 4px; padding:10px 12px; border-radius:9px; background:#e8f7f3; color:#087b69; font-size:17px; font-weight:700; text-align:center; }
   .msg .end-exemplo { margin:8px 0 6px; font-size:18px; }
   .end-tabela { width:100%; border-collapse:collapse; font-size:14px; white-space:normal; }
@@ -77,7 +68,6 @@
   .end-tabela .num { width:44px; font-weight:700; font-size:15px; color:#087b69; }
   .end-tabela .ico { width:38px; }
   .end-tabela svg { display:block; }
-  .feedback-ok { display:none; padding:10px; margin-top:12px; border-radius:8px; background:#e8f7f3; color:#087b69; text-align:center; font-weight:650; }
   @keyframes pulsa { 50% { transform:scale(1.12); } }
 </style>
 </head>
@@ -91,7 +81,6 @@
   <div class="menu" id="menuBox">
     <button type="button" data-modal="aboutModal">Sobre o Simba</button>
     <button type="button" data-modal="howModal">Como funciona</button>
-    <button type="button" data-modal="feedbackModal">Feedback</button>
   </div>
   <div id="chat"></div>
   <footer>
@@ -107,7 +96,6 @@
 
   <div class="modal-wrap" id="aboutModal"><section class="modal"><div class="modal-head"><h2>Sobre o Simba</h2><button class="modal-close" type="button" aria-label="Fechar">×</button></div><div class="modal-body"><p>O Simba é o atendente automático do Almoxarifado PDL. Ele ajuda a localizar materiais, consultar códigos e verificar o saldo disponível.</p><p><b>Atenção ao saldo:</b> a quantidade corresponde à última atualização exibida no cabeçalho. Uma retirada ou entrada feita depois desse horário pode ainda não aparecer.</p><p>As respostas são voltadas ao atendimento do almoxarifado. Procedimentos, autorizações e escolha de EPI devem ser confirmados com a equipe responsável.</p></div></section></div>
   <div class="modal-wrap" id="howModal"><section class="modal"><div class="modal-head"><h2>Como funciona</h2><button class="modal-close" type="button" aria-label="Fechar">×</button></div><div class="modal-body"><p>O Simba consulta a base do Almoxarifado PDL para localizar materiais e mostrar o saldo registrado na última atualização.</p><h3>Como pesquisar</h3><ul class="examples"><li><b>Nome ou característica:</b> óculos de segurança, válvula borboleta 3 polegadas.</li><li><b>Código:</b> envie o número do material para uma consulta direta.</li><li><b>Referência técnica:</b> informe marca, modelo ou medida quando conhecer.</li></ul><h3>Como ler o resultado</h3><p>Cada resultado apresenta o código, a descrição cadastrada e o <b>saldo disponível em destaque</b>. Confira também o horário de atualização no cabeçalho, pois movimentações posteriores podem ainda não estar registradas.</p></div></section></div>
-  <div class="modal-wrap" id="feedbackModal"><section class="modal"><div class="modal-head"><h2>Enviar feedback</h2><button class="modal-close" type="button" aria-label="Fechar">×</button></div><div class="modal-body"><p>Conte como foi o atendimento do Simba: o que ajudou, o que faltou e o que podemos melhorar.</p><p>O formulário abre numa nova aba e leva menos de 1 minuto.</p><a class="feedback-send" id="feedbackLink" href="#" target="_blank" rel="noopener">Abrir formulário de feedback</a><div class="feedback-ok" id="feedbackAviso">O formulário de feedback ainda não foi configurado.</div></div></section></div>
 </div>
 
 <script>
@@ -1453,12 +1441,6 @@ document.querySelectorAll("[data-modal]").forEach(b => b.onclick = () => {
 document.querySelectorAll(".modal-close").forEach(b => b.onclick = () => b.closest(".modal-wrap").classList.remove("open"));
 document.querySelectorAll(".modal-wrap").forEach(m => m.onclick = e => { if (e.target === m) m.classList.remove("open"); });
 
-// Feedback vai para o Microsoft Forms: as respostas caem numa planilha do Fernando (antes ficava só no celular)
-// Para ligar: cole aqui o link do Forms (no Forms: "Coletar respostas" > "Copiar link")
-const LINK_FORMS_FEEDBACK = "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=i-tiofXcMEC5C786XmApy5KyqLWboKlHmlUfX0TkSllURUJITTZOMkZFSVU0V0tXVVhGMU43Nk1aRy4u";
-const feedbackLink = document.getElementById("feedbackLink");
-if (LINK_FORMS_FEEDBACK) feedbackLink.href = LINK_FORMS_FEEDBACK;
-else feedbackLink.onclick = e => { e.preventDefault(); document.getElementById("feedbackAviso").style.display = "block"; };
 document.getElementById("log").onclick = () => {
   let l = [];
   try { l = JSON.parse(localStorage.getItem(CHAVE_LOG) || "[]"); } catch (e) {}
