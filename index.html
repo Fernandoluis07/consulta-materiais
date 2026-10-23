@@ -68,6 +68,7 @@
   .end-tabela .num { width:44px; font-weight:700; font-size:15px; color:#087b69; }
   .end-tabela .ico { width:38px; }
   .end-tabela svg { display:block; }
+  .end-como { margin-top:8px; padding:9px 11px; border-radius:8px; background:#eef6ff; color:#1f3b57; white-space:normal; font-size:13.5px; line-height:1.45; }
   @keyframes pulsa { 50% { transform:scale(1.12); } }
 </style>
 </head>
@@ -307,15 +308,42 @@ function busca(msg, termosProntos) {
 
 // ---------------- CONVERSA ----------------
 const fmt = n => Number(n).toLocaleString("pt-BR");
-// Endereço do SAP (Pos.dpst.): "0300707201" vira "030-07-07-2-01" = área, rua, módulo, nível, bin
-// (no Porta-palete o último é o pallet). Fora do padrão (ex.: "4002") mostra do jeito que veio
+// Endereço do SAP (Pos.dpst.) desmontado em linhas (número, ícone, nome). Fora dos formatos conhecidos mostra cru.
+//   Padrão    "0300707201" -> 030-07-07-2-01 = área, rua, módulo, nível, bin (no Porta-palete o último é o pallet)
+//   Rua 8     "0200801"    -> 020-08-01      = Porta-palete, Rua 8 (área grande, materiais grandes sobre pallets), piso
+//   Bobinas   "04001034"   -> 040-01-03-4    = Porta-bobina (cabos), rua, módulo, nível
+//   Gaiolas   "4002"       -> 40-02          = área das gaiolas (pallet gradeado com tubos de PVC; barras em pé), gaiola
+//   Cantilever "09001023"  -> 090-01-02-3    = área dos cantilevers, rua, cantilever, braço (braço 1 = o de baixo)
+//              (alguns vieram do SAP sem o 0 da frente, ex.: "9001023": completa)
 const AREAS = {"20":"Porta-palete", "30":"Mezanino inferior", "31":"Mezanino superior", "42":"Gases", "99":"Siderúrgico"};
 const partesEndereco = e => {
-  const m = String(e || "").trim().match(/^(\d)(\d\d)(\d\d)(\d\d)(\d)(\d\d)$/);
-  return m && AREAS[m[2]] ? {area: m[1] + m[2], nomeArea: AREAS[m[2]], rua: m[3], modulo: m[4], nivel: m[5], bin: m[6], pallet: m[2] === "20"} : null;
+  e = String(e || "").trim();
+  let m = e.match(/^(\d)(\d\d)(\d\d)(\d\d)(\d)(\d\d)$/);
+  if (m && AREAS[m[2]]) {
+    const pallet = m[2] === "20";
+    return {codigo: `${m[1]}${m[2]}-${m[3]}-${m[4]}-${m[5]}-${m[6]}`, nomeArea: AREAS[m[2]],
+      linhas: [[m[1] + m[2], "area", AREAS[m[2]]], [m[3], "rua", "Rua"], [m[4], "modulo", "Módulo"],
+               [m[5], "nivel", "Nível"], [m[6], pallet ? "pallet" : "bin", pallet ? "Pallet" : "Bin"]]};
+  }
+  if ((m = e.match(/^0(20)(08)(\d\d)$/)))
+    return {codigo: `0${m[1]}-${m[2]}-${m[3]}`, nomeArea: "Porta-palete · Rua 8",
+      linhas: [["0" + m[1], "area", "Porta-palete"], [m[2], "rua8", "Rua 8"], [m[3], "piso", "Piso"]],
+      comoChegar: "Entre no almoxarifado e siga em frente. A <b>Rua 8</b> fica <b>logo depois do Porta-bobina</b>. O material está nessa área."};
+  if ((m = e.match(/^0(40)(\d\d)(\d\d)(\d)$/)))
+    return {codigo: `0${m[1]}-${m[2]}-${m[3]}-${m[4]}`, nomeArea: "Porta-bobina",
+      linhas: [["0" + m[1], "bobina", "Porta-bobina"], [m[2], "rua", "Rua"], [m[3], "modulo", "Módulo"], [m[4], "nivel", "Nível"]]};
+  if ((m = e.match(/^(40)(\d\d)$/)))
+    return {codigo: `${m[1]}-${m[2]}`, nomeArea: "Gaiolas",
+      linhas: [[m[1], "area", "Área das gaiolas"], [m[2], "gaiola", "Gaiola"]],
+      // (a gaiola 04 é dos eixos, que ficam em pé direto, sem tubo)
+      comoChegar: `Entre no almoxarifado e siga em frente. As <b>gaiolas</b> ficam <b>logo depois do Mezanino, antes do Porta-bobina</b>. Procure a <b>gaiola ${m[2]}</b>` +
+        (m[2] === "04" ? "." : ": o material fica em pé, dentro dos tubos.")};
+  if ((m = e.match(/^0?(90)(\d\d)(\d\d)([1-5])$/)))
+    return {codigo: `0${m[1]}-${m[2]}-${m[3]}-${m[4]}`, nomeArea: "Cantilever",
+      linhas: [["0" + m[1], "cantArea", "Área dos cantilevers"], [m[2], "rua", "Rua"], [m[3], "cantilever", "Cantilever"], [m[4], "braco" + m[4], "Braço"]]};
+  return null;
 };
-const codigoEndereco = p => `${p.area}-${p.rua}-${p.modulo}-${p.nivel}-${p.bin}`;
-const enderecoDe = it => { const p = partesEndereco(it.endereco); return p ? `${codigoEndereco(p)} (${p.nomeArea})` : String(it.endereco || "").trim(); };
+const enderecoDe = it => { const p = partesEndereco(it.endereco); return p ? `${p.codigo} (${p.nomeArea})` : String(it.endereco || "").trim(); };
 const linhaEndereco = it => it.endereco ? `\n📍 Endereço: *${enderecoDe(it)}*` : "";
 
 const linhaItem = it => `*${it.codigo}* – ${it.descricao}\nSaldo disponível: *${fmt(it.saldo)} ${it.unidade}*` + linhaEndereco(it);
@@ -330,7 +358,7 @@ const detalhe = it => `📦 *${it.codigo}*\n${it.descricao}\n` +
 const ICONE = (() => {
   const v = "#087b69", c = "#9ee0cf";
   const svg = (corpo, larg = 1.8) => `<svg viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="${v}" stroke-width="${larg}" stroke-linejoin="round" stroke-linecap="round">${corpo}</svg>`;
-  return {
+  const icones = {
     area: svg(`<path d="M3 13 16 5l13 8v14H3z" fill="${c}"/><path d="M8 27V17h16v10"/><path d="M8 21h16M8 24h16"/>`),
     rua: svg(`<rect x="3" y="5" width="6" height="22" fill="${c}"/><rect x="23" y="5" width="6" height="22" fill="${c}"/><path d="M16 9v14M13 20l3 3 3-3"/>`),
     modulo: svg(`<rect x="1.5" y="6" width="9" height="21" stroke-opacity=".45"/><path d="M1.5 13h9M1.5 20h9" stroke-opacity=".45"/>` +
@@ -345,13 +373,50 @@ const ICONE = (() => {
       `<polygon points="4,16 16,22 16,27 4,21" fill="#c9efe4"/><polygon points="16,22 28,16 28,21 16,27" fill="${c}"/>` +
       `<polygon points="6,19 9.5,20.75 9.5,23.25 6,21.5" fill="${v}" stroke="none"/><polygon points="11,21.5 14.5,23.25 14.5,25.75 11,24" fill="${v}" stroke="none"/>` +
       `<polygon points="17.5,23.25 21,21.5 21,24 17.5,25.75" fill="${v}" stroke="none"/><polygon points="22.5,20.75 26,19 26,21.5 22.5,23.25" fill="${v}" stroke="none"/>`, 1.5),
+    // Bobina de cabo vista de frente, com a ponta do cabo saindo
+    bobina: svg(`<circle cx="15" cy="15" r="12" fill="#c9efe4"/><circle cx="15" cy="15" r="9" fill="${c}"/>` +
+      `<circle cx="15" cy="15" r="6.5" stroke-width="1"/><circle cx="15" cy="15" r="4.2" stroke-width="1"/>` +
+      `<circle cx="15" cy="15" r="2.2" fill="#fff"/><path d="M24 15c3 0 5 3 5 8v4" stroke-width="2"/>`, 1.5),
+    // Rua 8: material grande em cima de pallet
+    rua8: svg(`<rect x="5" y="9" width="22" height="12" fill="${c}"/><path d="M12 9v12M20 9v12" stroke-width="1"/>` +
+      `<rect x="3" y="21" width="26" height="2.5" fill="${v}" stroke="none"/><rect x="4" y="23.5" width="3.5" height="3" fill="${v}" stroke="none"/>` +
+      `<rect x="14.25" y="23.5" width="3.5" height="3" fill="${v}" stroke="none"/><rect x="24.5" y="23.5" width="3.5" height="3" fill="${v}" stroke="none"/>` +
+      `<path d="M1 29h30" stroke-width="1.2"/>`, 1.5),
+    // Gaiola em 3D: pallet gradeado com as barras saindo por cima dos tubos
+    gaiola: svg(`<path d="M20 9 27 5.5V22l-7 3.5z" fill="#c9efe4"/><path d="M4 9h16v16.5H4z" fill="${c}"/>` +
+      `<path d="M8 9v16.5M12 9v16.5M16 9v16.5M4 13.5h16M4 17.5h16M4 21.5h16" stroke-width=".7"/>` +
+      `<path d="M22.3 7.9v16.5M24.7 6.7v16.5M20 13.3l7-3.5M20 17.3l7-3.5M20 21.3l7-3.5" stroke-width=".7"/>` +
+      `<path d="M4 9 11 5.5h16"/><path d="M7 9V3.5M10.5 7.5V2.5M14 9V4M17.5 7.5V3M21 7V2.5M24.5 6V1.8" stroke-width="2"/>` +
+      `<path d="M3 25.5h18v2H3zM21 25.5l7-3.5v2l-7 3.5z" fill="${v}" stroke="none"/>` +
+      `<path d="M4 27.5h2.5v2H4zM10.75 27.5h2.5v2h-2.5zM17.5 27.5h2.5v2h-2.5z" fill="${v}" stroke="none"/>`, 1.3),
+    // Piso: espaço demarcado
+    piso: svg(`<rect x="4" y="6" width="24" height="20" rx="2" fill="${c}" stroke-dasharray="3 2"/>` +
+      `<path d="M16 10v12M10 16h12" stroke-width="1" stroke-opacity=".5"/><circle cx="16" cy="16" r="2.5" fill="${v}" stroke="none"/>`, 1.5),
   };
+  // Cantilever visto de frente: 2 colunas, ferro em X no meio, 5 braços e o material atravessado em cima de cada braço.
+  // destaque = número do braço (1 = o de baixo); os outros ficam apagados
+  const cantilever = (x0, x1, destaque = 0) => {
+    const bracos = [24.5, 20, 15.5, 11, 6.5];
+    return `<rect x="${x0}" y="3" width="2.6" height="24" fill="#c9efe4"/><rect x="${x1 - 2.6}" y="3" width="2.6" height="24" fill="#c9efe4"/>` +
+      `<path d="M${x0 - 1.5} 27.5h5.6M${x1 - 4.1} 27.5h5.6" stroke-width="2.2"/>` +
+      `<path d="M${x0 + 2.6} 26 ${x1 - 2.6} 17M${x0 + 2.6} 17 ${x1 - 2.6} 26" stroke-width=".8" stroke-opacity=".55"/>` +
+      bracos.map((y, i) => {
+        const d = destaque === i + 1, cor = d ? v : c, larg = d ? 1.3 : .8;
+        return `<g opacity="${destaque && !d ? .25 : 1}"><rect x="${x0 - .8}" y="${y}" width="4.2" height="1.6" fill="${cor}" stroke="${v}" stroke-width="${larg}"/>` +
+          `<rect x="${x1 - 3.4}" y="${y}" width="4.2" height="1.6" fill="${cor}" stroke="${v}" stroke-width="${larg}"/>` +
+          `<rect x="${x0 - 1}" y="${y - 2}" width="${x1 - x0 + 2}" height="2" rx="1" fill="${cor}" stroke="${v}" stroke-width="${larg}"/></g>`;
+      }).join("");
+  };
+  icones.cantilever = svg(cantilever(5, 27), 1.5);
+  icones.cantArea = svg(`<g transform="translate(0,13) scale(.5)">${cantilever(3, 29)}</g><g transform="translate(16,13) scale(.5)">${cantilever(3, 29)}</g>` +
+    `<path d="M1 28h30" stroke-width="1"/>`, 1.5);
+  for (let n = 1; n <= 5; n++) icones["braco" + n] = svg(cantilever(5, 27, n), 1.5);
+  return icones;
 })();
-// Endereço em destaque + linha a linha com ícone
-const blocoEndereco = p => `<div class="end-exemplo">📍 ${codigoEndereco(p)}</div><table class="end-tabela">` +
-  [[p.area, ICONE.area, p.nomeArea], [p.rua, ICONE.rua, "Rua"], [p.modulo, ICONE.modulo, "Módulo"],
-   [p.nivel, ICONE.nivel, "Nível"], [p.bin, p.pallet ? ICONE.pallet : ICONE.bin, p.pallet ? "Pallet" : "Bin"]]
-    .map(([n, ic, t]) => `<tr><td class="num">${n}</td><td class="ico">${ic}</td><td>${t}</td></tr>`).join("") + `</table>`;
+// Endereço em destaque + linha a linha com ícone (+ "Como chegar" quando o lugar precisa de explicação)
+const blocoEndereco = p => `<div class="end-exemplo">📍 ${p.codigo}</div><table class="end-tabela">` +
+  p.linhas.map(([n, ic, t]) => `<tr><td class="num">${n}</td><td class="ico">${ICONE[ic]}</td><td>${t}</td></tr>`).join("") + `</table>` +
+  (p.comoChegar ? `<div class="end-como">🧭 <b>Como chegar</b><br>${p.comoChegar}</div>` : "");
 
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
 const localizacaoDe = it => {
